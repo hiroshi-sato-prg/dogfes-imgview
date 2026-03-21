@@ -335,6 +335,16 @@ input {
   margin: 0;
 }
 
+.summaryActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.summaryDeleteButton {
+  padding: 10px 14px;
+}
+
 .viewerPageShell {
   width: min(1600px, calc(100% - 24px));
   margin: 0 auto;

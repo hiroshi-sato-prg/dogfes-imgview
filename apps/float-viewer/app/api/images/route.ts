@@ -17,3 +17,32 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+type DeleteImagesRequestBody = {
+  imageId?: string;
+};
+
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json()) as DeleteImagesRequestBody;
+    const imageId = body.imageId?.trim();
+
+    if (!imageId) {
+      return NextResponse.json(
+        { error: "削除対象の画像を選択してください。" },
+        { status: 400 },
+      );
+    }
+
+    const storage = getStorageProvider();
+    const result = await storage.deleteImage(imageId);
+
+    return NextResponse.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "画像の削除に失敗しました。";
+
+    const status = message.includes("見つかりません") ? 404 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}

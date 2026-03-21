@@ -25,7 +25,12 @@ export type SaveImageInput = {
   derivedFromId?: string;
 };
 
+export type DeleteImagesResult = {
+  deletedIds: string[];
+};
+
 export interface StorageProvider {
   saveImage(input: SaveImageInput): Promise<ImageRecord>;
   listImages(): Promise<ImageRecord[]>;
+  deleteImage(imageId: string): Promise<DeleteImagesResult>;
 }

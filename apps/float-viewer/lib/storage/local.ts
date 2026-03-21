@@ -1,7 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
+  DeleteImagesResult,
   ImageRecord,
   ImageSource,
   SaveImageInput,
@@ -43,6 +44,10 @@ async function readImageIndex(): Promise<ImageRecord[]> {
 
 async function writeImageIndex(records: ImageRecord[]) {
   await writeFile(IMAGE_INDEX_PATH, JSON.stringify(records, null, 2) + "\n", "utf8");
+}
+
+async function removeImageFile(record: ImageRecord) {
+  await rm(filePathForSource(record.source, record.storedName), { force: true });
 }
 
 function sanitizeFileName(fileName: string) {
@@ -155,5 +160,38 @@ export class LocalStorageProvider implements StorageProvider {
   async listImages(): Promise<ImageRecord[]> {
     await ensureStorageDirs();
     return readImageIndex();
+  }
+
+  async deleteImage(imageId: string): Promise<DeleteImagesResult> {
+    await ensureStorageDirs();
+
+    const records = await readImageIndex();
+    const targetImage = records.find((record) => record.id === imageId);
+
+    if (!targetImage) {
+      throw new Error("削除対象の画像が見つかりません。");
+    }
+
+    const recordsToDelete = records.filter((record) => {
+      if (record.id === targetImage.id) {
+        return true;
+      }
+
+      if (targetImage.source === "upload" && record.derivedFromId === targetImage.id) {
+        return true;
+      }
+
+      return false;
+    });
+
+    await Promise.all(recordsToDelete.map((record) => removeImageFile(record)));
+
+    const deletedIds = new Set(recordsToDelete.map((record) => record.id));
+    const remainingRecords = records.filter((record) => !deletedIds.has(record.id));
+    await writeImageIndex(remainingRecords);
+
+    return {
+      deletedIds: [...deletedIds],
+    };
   }
 }
