@@ -83,6 +83,9 @@ export function FloatDashboard() {
             飛ぶ画像だけを大きく見る
           </Link>
         </div>
+        <p className="heroLead">
+          この公開版は GitHub の <code>main</code> 更新後に自動デプロイされます。
+        </p>
       </div>
 
       {errorMessage ? <p className="errorBanner">{errorMessage}</p> : null}
