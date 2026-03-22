@@ -65,7 +65,7 @@ export function ViewerOnlyScreen() {
           <p className="eyebrow">Viewer Mode</p>
           <h1>飛ぶ画像だけを大きく表示</h1>
           <p className="heroLead">
-            抽出済みの犬画像だけを、大きな表示領域で確認できます。
+            閲覧用として、抽出済みの犬画像だけを大きな表示領域で確認できます。
           </p>
         </div>
 
