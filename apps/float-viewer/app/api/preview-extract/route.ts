@@ -7,7 +7,24 @@ export const runtime = "nodejs";
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  let inputName = "";
+  let inputType = "";
+  let inputSize = 0;
+
   try {
     const formData = await request.formData();
     const fileEntry = formData.get("image");
@@ -33,6 +50,20 @@ export async function POST(request: Request) {
       );
     }
 
+    inputName = fileEntry.name;
+    inputType = fileEntry.type;
+    inputSize = fileEntry.size;
+
+    console.info(
+      "[float-viewer] preview-extract:start",
+      JSON.stringify({
+        fileName: inputName,
+        mimeType: inputType,
+        inputBytes: inputSize,
+        inputSize: formatBytes(inputSize),
+      }),
+    );
+
     const arrayBuffer = await fileEntry.arrayBuffer();
     const extractedImage = await removeSourceBackgroundLocally(
       Buffer.from(arrayBuffer),
@@ -43,6 +74,24 @@ export async function POST(request: Request) {
       mimeType: extractedImage.mimeType,
       size: extractedImage.buffer.byteLength,
     });
+
+    console.info(
+      "[float-viewer] preview-extract:success",
+      JSON.stringify({
+        fileName: inputName,
+        mimeType: inputType,
+        inputBytes: inputSize,
+        inputSize: formatBytes(inputSize),
+        preparedBytes: extractedImage.stats.preparedBytes,
+        preparedSize: formatBytes(extractedImage.stats.preparedBytes),
+        preparedWidth: extractedImage.stats.preparedWidth,
+        preparedHeight: extractedImage.stats.preparedHeight,
+        wasResized: extractedImage.stats.wasResized,
+        outputBytes: extractedImage.buffer.byteLength,
+        outputSize: formatBytes(extractedImage.buffer.byteLength),
+        elapsedMs: Date.now() - startedAt,
+      }),
+    );
 
     return NextResponse.json(
       {
@@ -56,6 +105,18 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "抽出画像の確認に失敗しました。";
+
+    console.error(
+      "[float-viewer] preview-extract:error",
+      JSON.stringify({
+        fileName: inputName || null,
+        mimeType: inputType || null,
+        inputBytes: inputSize || null,
+        inputSize: inputSize ? formatBytes(inputSize) : null,
+        elapsedMs: Date.now() - startedAt,
+        error: message,
+      }),
+    );
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

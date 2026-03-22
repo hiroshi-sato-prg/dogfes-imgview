@@ -1,13 +1,76 @@
 import removeBackground from "@imgly/background-removal-node";
 import sharp from "sharp";
 
+type BackgroundRemovalStats = {
+  originalBytes: number;
+  preparedBytes: number;
+  originalWidth: number | null;
+  originalHeight: number | null;
+  preparedWidth: number | null;
+  preparedHeight: number | null;
+  wasResized: boolean;
+};
+
 type PreprocessedImage = {
   buffer: Buffer;
   mimeType: string;
+  stats: BackgroundRemovalStats;
 };
 
 const ALPHA_THRESHOLD = 8;
 const MIN_TRIMMED_AREA = 64;
+const MAX_BACKGROUND_REMOVAL_DIMENSION = 1600;
+
+function normalizedMimeType(format: string | undefined, fallbackMimeType: string) {
+  switch (format) {
+    case "jpeg":
+    case "jpg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    default:
+      return fallbackMimeType || "image/jpeg";
+  }
+}
+
+async function prepareSourceImage(
+  buffer: Buffer,
+  mimeType: string,
+): Promise<{
+  buffer: Buffer;
+  mimeType: string;
+  stats: BackgroundRemovalStats;
+}> {
+  const image = sharp(buffer, { animated: false }).rotate();
+  const metadata = await image.metadata();
+  const originalWidth = metadata.width ?? null;
+  const originalHeight = metadata.height ?? null;
+  const prepared = image.resize({
+    width: MAX_BACKGROUND_REMOVAL_DIMENSION,
+    height: MAX_BACKGROUND_REMOVAL_DIMENSION,
+    fit: "inside",
+    withoutEnlargement: true,
+  });
+  const { data, info } = await prepared.toBuffer({ resolveWithObject: true });
+
+  return {
+    buffer: data,
+    mimeType: normalizedMimeType(info.format, mimeType),
+    stats: {
+      originalBytes: buffer.byteLength,
+      preparedBytes: data.byteLength,
+      originalWidth,
+      originalHeight,
+      preparedWidth: info.width ?? null,
+      preparedHeight: info.height ?? null,
+      wasResized:
+        (originalWidth !== null && info.width !== originalWidth) ||
+        (originalHeight !== null && info.height !== originalHeight),
+    },
+  };
+}
 
 async function trimTransparentPadding(buffer: Buffer): Promise<Buffer> {
   const image = sharp(buffer, { animated: false }).ensureAlpha();
@@ -74,11 +137,12 @@ export async function removeSourceBackgroundLocally(
   sourceImage: Buffer,
   mimeType: string,
 ): Promise<PreprocessedImage> {
-  const sourceArrayBuffer = new ArrayBuffer(sourceImage.byteLength);
-  new Uint8Array(sourceArrayBuffer).set(sourceImage);
+  const preparedImage = await prepareSourceImage(sourceImage, mimeType);
+  const sourceArrayBuffer = new ArrayBuffer(preparedImage.buffer.byteLength);
+  new Uint8Array(sourceArrayBuffer).set(preparedImage.buffer);
 
   const sourceBlob = new Blob([sourceArrayBuffer], {
-    type: mimeType || "image/jpeg",
+    type: preparedImage.mimeType || "image/jpeg",
   });
 
   const blob = await removeBackground(sourceBlob, {
@@ -95,5 +159,6 @@ export async function removeSourceBackgroundLocally(
   return {
     buffer: trimmedBuffer,
     mimeType: "image/png",
+    stats: preparedImage.stats,
   };
 }

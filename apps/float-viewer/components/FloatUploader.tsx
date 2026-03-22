@@ -1,8 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
 
+import { createCroppedImageFile } from "@/lib/client/crop-image";
 import type { ImageRecord } from "@/lib/storage/types";
 
 type FloatUploaderProps = {
@@ -14,14 +16,22 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewToken, setPreviewToken] = useState("");
   const [localPreviewUrl, setLocalPreviewUrl] = useState("");
+  const [croppedLocalPreviewUrl, setCroppedLocalPreviewUrl] = useState("");
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const imageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     if (!selectedFile) {
       setLocalPreviewUrl("");
+      setCroppedLocalPreviewUrl("");
+      setCrop(undefined);
+      setCompletedCrop(null);
+      imageRef.current = null;
       return;
     }
 
@@ -33,6 +43,47 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
     };
   }, [selectedFile]);
 
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+
+    async function updateCroppedPreview() {
+      if (!selectedFile || !completedCrop || !imageRef.current) {
+        setCroppedLocalPreviewUrl("");
+        return;
+      }
+
+      try {
+        const croppedFile = await createCroppedImageFile({
+          image: imageRef.current,
+          file: selectedFile,
+          crop: completedCrop,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        objectUrl = URL.createObjectURL(croppedFile);
+        setCroppedLocalPreviewUrl(objectUrl);
+      } catch {
+        if (active) {
+          setCroppedLocalPreviewUrl("");
+        }
+      }
+    }
+
+    void updateCroppedPreview();
+
+    return () => {
+      active = false;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [completedCrop, selectedFile]);
+
   const selectedFileSummary = useMemo(() => {
     if (!selectedFile) {
       return "未選択";
@@ -41,6 +92,53 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
     const sizeInMb = (selectedFile.size / 1024 / 1024).toFixed(2);
     return `${selectedFile.name} (${sizeInMb} MB)`;
   }, [selectedFile]);
+
+  function invalidateExtractedPreview() {
+    if (!previewUrl && !previewToken) {
+      return;
+    }
+
+    setPreviewUrl("");
+    setPreviewToken("");
+    setErrorMessage("");
+    setStatusMessage("トリミング範囲を変更しました。もう一度抽出画像を確認してください。");
+  }
+
+  function handleSourceImageLoad(event: React.SyntheticEvent<HTMLImageElement>) {
+    const image = event.currentTarget;
+
+    imageRef.current = image;
+    setCrop({
+      unit: "%",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    });
+    setCompletedCrop({
+      unit: "px",
+      x: 0,
+      y: 0,
+      width: image.width,
+      height: image.height,
+    });
+  }
+
+  async function createPreparedUploadFile() {
+    if (!selectedFile) {
+      throw new Error("アップロードする画像を選択してください。");
+    }
+
+    if (!completedCrop || !imageRef.current) {
+      throw new Error("画像の読み込み完了後に再度お試しください。");
+    }
+
+    return createCroppedImageFile({
+      image: imageRef.current,
+      file: selectedFile,
+      crop: completedCrop,
+    });
+  }
 
   async function handlePreview() {
     if (!selectedFile) {
@@ -55,8 +153,9 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
     setPreviewToken("");
 
     try {
+      const preparedFile = await createPreparedUploadFile();
       const formData = new FormData();
-      formData.append("image", selectedFile);
+      formData.append("image", preparedFile);
 
       const previewResponse = await fetch("/api/preview-extract", {
         method: "POST",
@@ -109,8 +208,9 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
     setStatusMessage("アップロード中です...");
 
     try {
+      const preparedFile = await createPreparedUploadFile();
       const formData = new FormData();
-      formData.append("image", selectedFile);
+      formData.append("image", preparedFile);
 
       const uploadResponse = await fetch("/api/upload", {
         method: "POST",
@@ -152,6 +252,8 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
       setSelectedFile(null);
       setPreviewUrl("");
       setPreviewToken("");
+      setCrop(undefined);
+      setCompletedCrop(null);
       setStatusMessage("抽出画像を追加しました。背景の上をふわふわ飛びます。");
     } catch (error) {
       setStatusMessage("");
@@ -199,20 +301,60 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
 
         {selectedFile ? (
           <div className="previewGrid">
-            <div className="previewCard">
-              <p className="previewTitle">元画像</p>
+            <div className="previewCard previewCardWide">
+              <p className="previewTitle">元画像のトリミング範囲</p>
               {localPreviewUrl ? (
+                <div className="cropStage">
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(_, nextPercentCrop) => {
+                      setCrop(nextPercentCrop);
+                      invalidateExtractedPreview();
+                    }}
+                    onComplete={(nextPixelCrop) => {
+                      setCompletedCrop(nextPixelCrop);
+                    }}
+                    minWidth={40}
+                    minHeight={40}
+                    keepSelection
+                  >
+                    {/* react-image-crop requires a plain img element as its direct child. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={localPreviewUrl}
+                      alt="選択した元画像"
+                      className="cropImage"
+                      onLoad={handleSourceImageLoad}
+                    />
+                  </ReactCrop>
+                </div>
+              ) : null}
+              <p className="mutedText cropHint">
+                ドラッグして保存したい範囲を自由に調整できます。抽出確認とアップロードには、この切り抜き結果が使われます。
+              </p>
+            </div>
+
+            <div className="previewCard">
+              <p className="previewTitle">トリミング後プレビュー</p>
+              {croppedLocalPreviewUrl ? (
                 <div className="previewFrame">
                   <Image
-                    src={localPreviewUrl}
-                    alt="選択した元画像"
+                    src={croppedLocalPreviewUrl}
+                    alt="トリミング後プレビュー"
                     width={320}
                     height={320}
                     className="previewImage"
                     unoptimized
                   />
                 </div>
-              ) : null}
+              ) : (
+                <div className="previewPlaceholder">
+                  <p>画像の読み込み中です。</p>
+                  <p className="mutedText">
+                    読み込みが終わると、ここに切り抜き結果が表示されます。
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="previewCard">
@@ -248,7 +390,7 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
             className="secondaryButton"
             type="button"
             onClick={() => void handlePreview()}
-            disabled={!selectedFile || isPreviewing || isUploading}
+            disabled={!selectedFile || !completedCrop || isPreviewing || isUploading}
           >
             {isPreviewing ? "抽出確認中..." : "抽出画像を確認する"}
           </button>
@@ -256,7 +398,13 @@ export function FloatUploader({ onUploaded }: FloatUploaderProps) {
           <button
             className="primaryButton"
             type="submit"
-            disabled={!selectedFile || !previewUrl || isPreviewing || isUploading}
+            disabled={
+              !selectedFile ||
+              !completedCrop ||
+              !previewUrl ||
+              isPreviewing ||
+              isUploading
+            }
           >
             {isUploading ? "アップロード中..." : "問題なければアップロード"}
           </button>

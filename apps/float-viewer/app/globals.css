@@ -1,3 +1,5 @@
+@import "react-image-crop/dist/ReactCrop.css";
+
 :root {
   color-scheme: dark;
   --bg: #08131f;
@@ -163,9 +165,37 @@ input {
   border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.previewCardWide {
+  grid-column: 1 / -1;
+}
+
 .previewTitle {
   margin: 0;
   font-weight: 700;
+}
+
+.cropStage {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  padding: 12px;
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  overflow: hidden;
+}
+
+.cropStage .ReactCrop {
+  max-width: 100%;
+}
+
+.cropImage {
+  display: block;
+  max-width: 100%;
+  max-height: min(60vh, 520px);
+  object-fit: contain;
 }
 
 .previewFrame,
@@ -199,6 +229,10 @@ input {
 }
 
 .previewPlaceholder p {
+  margin: 0;
+}
+
+.cropHint {
   margin: 0;
 }
 
