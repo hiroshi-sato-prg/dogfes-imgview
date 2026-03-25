@@ -21,13 +21,13 @@ const IMAGE_INDEX_PATH = STORAGE_ROOT
   ? path.join(STORAGE_ROOT, "images.json")
   : path.join(DATA_DIR, "images.json");
 
-async function ensureStorageDirs() {
+export async function ensureStorageDirs() {
   await mkdir(PUBLIC_UPLOAD_DIR, { recursive: true });
   await mkdir(PUBLIC_EXTRACTED_DIR, { recursive: true });
   await mkdir(DATA_DIR, { recursive: true });
 }
 
-async function readImageIndex(): Promise<ImageRecord[]> {
+export async function readImageIndex(): Promise<ImageRecord[]> {
   try {
     const file = await readFile(IMAGE_INDEX_PATH, "utf8");
     const data = JSON.parse(file) as ImageRecord[];
@@ -42,7 +42,7 @@ async function readImageIndex(): Promise<ImageRecord[]> {
   }
 }
 
-async function writeImageIndex(records: ImageRecord[]) {
+export async function writeImageIndex(records: ImageRecord[]) {
   await writeFile(IMAGE_INDEX_PATH, JSON.stringify(records, null, 2) + "\n", "utf8");
 }
 
@@ -96,7 +96,7 @@ function publicDirForSource(source: ImageSource) {
   return source === "extracted" ? PUBLIC_EXTRACTED_DIR : PUBLIC_UPLOAD_DIR;
 }
 
-function urlPathForSource(source: ImageSource, storedName: string) {
+export function urlPathForSource(source: ImageSource, storedName: string) {
   return source === "extracted"
     ? `/extracted/${storedName}`
     : `/uploads/${storedName}`;
