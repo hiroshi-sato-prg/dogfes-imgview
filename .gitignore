@@ -15,4 +15,4 @@ apps/*/public/extracted
 .local-bin
 data
 public
-DEPLOYMENT_HANDOFF.md
+float-viewer-export-*.zip

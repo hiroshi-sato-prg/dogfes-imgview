@@ -153,19 +153,22 @@ STORAGE_ROOT=/data
 
 `float-viewer` は Railway で公開する前提です。
 
-設定前提:
-- GitHub リポジトリ接続済み
+現在の運用構成:
+- GitHub: `piropiropi0611-art/dogfes-imgview`
+- Railway Project: `dogfes-imgview`
+- Railway Service: `dogfes-float-viewer`
 - Root Directory: `apps/float-viewer`
 - Volume を `/data` にマウント
 - `STORAGE_ROOT=/data`
 
 公開 URL:
+- ベース: `https://dogfes-float-viewer-production.up.railway.app`
 - トップ: `/`
 - 閲覧用: `/viewer`
 
 ## デプロイについて
 
-現在の運用では、**GitHub の `main` に push すると Railway の自動デプロイが発生します。**
+現在の運用では、**`piropiropi0611-art/dogfes-imgview` の `main` に push すると Railway の自動デプロイが発生します。**
 
 注意点:
 - README のみの更新でも `main` へ push すればデプロイ対象になります
